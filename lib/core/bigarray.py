@@ -177,9 +177,8 @@ class BigArray(list):
 
         if isinstance(chunk, list):
             return chunk[offset]
-        else:
-            self._checkcache(index)
-            return self.cache.data[offset]
+        self._checkcache(index)
+        return self.cache.data[offset]
 
     def __setitem__(self, y, value):
         index = y // self.chunk_length

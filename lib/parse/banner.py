@@ -108,8 +108,8 @@ def bannerParser(banner):
         parseXmlFile(xmlfile, handler)
 
         handler = FingerprintHandler(banner, kb.bannerFp)
-        parseXmlFile(paths.GENERIC_XML, handler)
     else:
         handler = FingerprintHandler(banner, kb.bannerFp)
         parseXmlFile(xmlfile, handler)
-        parseXmlFile(paths.GENERIC_XML, handler)
+
+    parseXmlFile(paths.GENERIC_XML, handler)

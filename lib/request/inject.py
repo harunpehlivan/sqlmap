@@ -96,14 +96,22 @@ def _goInference(payload, expression, charsetType=None, firstChar=None, lastChar
     timeBasedCompare = (getTechnique() in (PAYLOAD.TECHNIQUE.TIME, PAYLOAD.TECHNIQUE.STACKED))
 
     if timeBasedCompare and conf.threads > 1 and kb.forceThreads is None:
-        msg = "multi-threading is considered unsafe in "
-        msg += "time-based data retrieval. Are you sure "
+        msg = (
+            "multi-threading is considered unsafe in "
+            + "time-based data retrieval. Are you sure "
+        )
+
         msg += "of your choice (breaking warranty) [y/N] "
 
         kb.forceThreads = readInput(msg, default='N', boolean=True)
 
     if not (timeBasedCompare and kb.dnsTest):
-        if (conf.eta or conf.threads > 1) and Backend.getIdentifiedDbms() and not re.search(r"(COUNT|LTRIM)\(", expression, re.I) and not (timeBasedCompare and not kb.forceThreads):
+        if (
+            ((conf.eta or conf.threads > 1))
+            and Backend.getIdentifiedDbms()
+            and not re.search(r"(COUNT|LTRIM)\(", expression, re.I)
+            and (not timeBasedCompare or kb.forceThreads)
+        ):
 
             if field and re.search(r"\ASELECT\s+DISTINCT\((.+?)\)\s+FROM", expression, re.I):
                 if Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL, DBMS.MONETDB, DBMS.VERTICA, DBMS.CRATEDB, DBMS.CUBRID):
@@ -187,8 +195,11 @@ def _goInferenceProxy(expression, fromUser=False, batch=False, unpack=True, char
         expressionFieldsList = [expressionFields]
 
     if len(expressionFieldsList) > 1:
-        infoMsg = "the SQL query provided has more than one field. "
-        infoMsg += "sqlmap will now unpack it into distinct queries "
+        infoMsg = (
+            "the SQL query provided has more than one field. "
+            + "sqlmap will now unpack it into distinct queries "
+        )
+
         infoMsg += "to be able to retrieve the output even if we "
         infoMsg += "are going blind"
         logger.info(infoMsg)
@@ -202,13 +213,14 @@ def _goInferenceProxy(expression, fromUser=False, batch=False, unpack=True, char
         expression, limitCond, topLimit, startLimit, stopLimit = agent.limitCondition(expression)
 
         if limitCond:
-            test = True
-
-            if not stopLimit or stopLimit <= 1:
-                if Backend.getIdentifiedDbms() in FROM_DUMMY_TABLE and expression.upper().endswith(FROM_DUMMY_TABLE[Backend.getIdentifiedDbms()]):
-                    test = False
-
-            if test:
+            if test := bool(
+                stopLimit
+                and stopLimit > 1
+                or Backend.getIdentifiedDbms() not in FROM_DUMMY_TABLE
+                or not expression.upper().endswith(
+                    FROM_DUMMY_TABLE[Backend.getIdentifiedDbms()]
+                )
+            ):
                 # Count the number of SQL query entries output
                 countFirstField = queries[Backend.getIdentifiedDbms()].count.query % expressionFieldsList[0]
                 countedExpression = expression.replace(expressionFields, countFirstField, 1)
@@ -266,8 +278,11 @@ def _goInferenceProxy(expression, fromUser=False, batch=False, unpack=True, char
                                 return None
 
                     elif count and not isDigit(count):
-                        warnMsg = "it was not possible to count the number "
-                        warnMsg += "of entries for the SQL query provided. "
+                        warnMsg = (
+                            "it was not possible to count the number "
+                            + "of entries for the SQL query provided. "
+                        )
+
                         warnMsg += "sqlmap will assume that it returns only "
                         warnMsg += "one entry"
                         logger.warn(warnMsg)
@@ -276,13 +291,12 @@ def _goInferenceProxy(expression, fromUser=False, batch=False, unpack=True, char
 
                     elif (not count or int(count) == 0):
                         if not count:
-                            warnMsg = "the SQL query provided does not "
-                            warnMsg += "return any output"
+                            warnMsg = "the SQL query provided does not " + "return any output"
                             logger.warn(warnMsg)
 
                         return None
 
-                elif (not stopLimit or stopLimit == 0):
+                elif stopLimit == 0:
                     return None
 
                 try:
@@ -509,19 +523,18 @@ def getValue(expression, blind=True, union=True, error=True, time=True, fromUser
     # Dirty patch (MSSQL --binary-fields with 0x31003200...)
     if Backend.isDbms(DBMS.MSSQL) and conf.binaryFields:
         def _(value):
-            if isinstance(value, six.text_type):
-                if value.startswith(u"0x"):
-                    value = value[2:]
-                    if value and len(value) % 4 == 0:
-                        candidate = ""
-                        for i in xrange(len(value)):
-                            if i % 4 < 2:
-                                candidate += value[i]
-                            elif value[i] != '0':
-                                candidate = None
-                                break
-                        if candidate:
-                            value = candidate
+            if isinstance(value, six.text_type) and value.startswith(u"0x"):
+                value = value[2:]
+                if value and len(value) % 4 == 0:
+                    candidate = ""
+                    for i in xrange(len(value)):
+                        if i % 4 < 2:
+                            candidate += value[i]
+                        elif value[i] != '0':
+                            candidate = None
+                            break
+                    if candidate:
+                        value = candidate
             return value
 
         value = applyFunctionRecursively(value, _)

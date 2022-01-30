@@ -49,8 +49,11 @@ def parseSitemap(url, retVal=None):
 
     except KeyboardInterrupt:
         abortedFlag = True
-        warnMsg = "user aborted during sitemap parsing. sqlmap "
-        warnMsg += "will use partial list"
+        warnMsg = (
+            "user aborted during sitemap parsing. sqlmap "
+            + "will use partial list"
+        )
+
         logger.warn(warnMsg)
 
     return retVal

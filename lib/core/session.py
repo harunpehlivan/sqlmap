@@ -26,9 +26,7 @@ def setDbms(dbms):
     hashDBWrite(HASHDB_KEYS.DBMS, dbms)
 
     _ = "(%s)" % ('|'.join(SUPPORTED_DBMS))
-    _ = re.search(r"\A%s( |\Z)" % _, dbms, re.I)
-
-    if _:
+    if _ := re.search(r"\A%s( |\Z)" % _, dbms, re.I):
         dbms = _.group(1)
 
     Backend.setDbms(dbms)

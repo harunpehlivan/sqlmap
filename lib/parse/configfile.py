@@ -42,10 +42,7 @@ def configFileProxy(section, option, datatype):
             errMsg += "'%s' in provided configuration file ('%s')" % (option, getUnicode(ex))
             raise SqlmapSyntaxException(errMsg)
 
-        if value:
-            conf[option] = value
-        else:
-            conf[option] = None
+        conf[option] = value or None
     else:
         debugMsg = "missing requested option '%s' (section " % option
         debugMsg += "'%s') into the configuration file, " % section
@@ -77,16 +74,27 @@ def configFileParser(configFile):
         errMsg = "missing a mandatory section 'Target' in the configuration file"
         raise SqlmapMissingMandatoryOptionException(errMsg)
 
-    mandatory = False
-
-    for option in ("direct", "url", "logFile", "bulkFile", "googleDork", "requestFile", "wizard"):
-        if config.has_option("Target", option) and config.get("Target", option) or cmdLineOptions.get(option):
-            mandatory = True
-            break
+    mandatory = any(
+        config.has_option("Target", option)
+        and config.get("Target", option)
+        or cmdLineOptions.get(option)
+        for option in (
+            "direct",
+            "url",
+            "logFile",
+            "bulkFile",
+            "googleDork",
+            "requestFile",
+            "wizard",
+        )
+    )
 
     if not mandatory:
-        errMsg = "missing a mandatory option in the configuration file "
-        errMsg += "(direct, url, logFile, bulkFile, googleDork, requestFile or wizard)"
+        errMsg = (
+            "missing a mandatory option in the configuration file "
+            + "(direct, url, logFile, bulkFile, googleDork, requestFile or wizard)"
+        )
+
         raise SqlmapMissingMandatoryOptionException(errMsg)
 
     for family, optionData in optDict.items():

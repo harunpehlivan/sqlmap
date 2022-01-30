@@ -333,10 +333,7 @@ class Format(object):
             else:
                 infoStr += "\nweb application technology: %s" % Format.humanize(info["technology"], ", ")
 
-        if conf.api:
-            return infoApi
-        else:
-            return infoStr.lstrip()
+        return infoApi if conf.api else infoStr.lstrip()
 
 class Backend(object):
     @staticmethod
@@ -346,10 +343,12 @@ class Backend(object):
         if dbms is None:
             return None
 
-        # Little precaution, in theory this condition should always be false
         elif kb.dbms is not None and kb.dbms != dbms:
-            warnMsg = "there appears to be a high probability that "
-            warnMsg += "this could be a false positive case"
+            warnMsg = (
+                "there appears to be a high probability that "
+                + "this could be a false positive case"
+            )
+
             logger.warn(warnMsg)
 
             msg = "sqlmap previously fingerprinted back-end DBMS as "
@@ -453,8 +452,11 @@ class Backend(object):
 
     @staticmethod
     def setArch():
-        msg = "what is the back-end database management system architecture?"
-        msg += "\n[1] 32-bit (default)"
+        msg = (
+            "what is the back-end database management system architecture?"
+            + "\n[1] 32-bit (default)"
+        )
+
         msg += "\n[2] 64-bit"
 
         while True:
@@ -524,18 +526,12 @@ class Backend(object):
     @staticmethod
     def getVersion():
         versions = filterNone(flattenValue(kb.dbmsVersion)) if not isinstance(kb.dbmsVersion, six.string_types) else [kb.dbmsVersion]
-        if not isNoneValue(versions):
-            return versions[0]
-        else:
-            return None
+        return versions[0] if not isNoneValue(versions) else None
 
     @staticmethod
     def getVersionList():
         versions = filterNone(flattenValue(kb.dbmsVersion)) if not isinstance(kb.dbmsVersion, six.string_types) else [kb.dbmsVersion]
-        if not isNoneValue(versions):
-            return versions
-        else:
-            return None
+        return versions if not isNoneValue(versions) else None
 
     @staticmethod
     def getOs():
@@ -579,11 +575,10 @@ class Backend(object):
         if Backend.getVersionList() is None:
             return False
 
-        for _ in Backend.getVersionList():
-            if _ != UNKNOWN_DBMS_VERSION and _ in versionList:
-                return True
-
-        return False
+        return any(
+            _ != UNKNOWN_DBMS_VERSION and _ in versionList
+            for _ in Backend.getVersionList()
+        )
 
     @staticmethod
     def isVersionGreaterOrEqualThan(version):
@@ -811,14 +806,16 @@ def getManualDirectories():
         infoMsg = "retrieved the web server document root: '%s'" % directories
         logger.info(infoMsg)
     else:
-        warnMsg = "unable to automatically retrieve the web server "
-        warnMsg += "document root"
+        warnMsg = "unable to automatically retrieve the web server " + "document root"
         logger.warn(warnMsg)
 
         directories = []
 
         message = "what do you want to use for writable directory?\n"
-        message += "[1] common location(s) ('%s') (default)\n" % ", ".join(root for root in defaultDocRoot)
+        message += "[1] common location(s) ('%s') (default)\n" % ", ".join(
+            defaultDocRoot
+        )
+
         message += "[2] custom location(s)\n"
         message += "[3] custom directory list file\n"
         message += "[4] brute force search"
@@ -866,9 +863,7 @@ def getManualDirectories():
             logger.info(infoMsg)
 
             msg = "use any additional custom directories [Enter for None]: "
-            answer = readInput(msg)
-
-            if answer:
+            if answer := readInput(msg):
                 directories.extend(answer.split(','))
 
         else:
@@ -979,11 +974,10 @@ def setColor(message, color=None, bold=False, level=None, istty=None):
                     level = None
                 retVal = LOGGER_HANDLER.colorize(message, level, True)
             else:
-                match = re.search(r"\(([^)]*)\s*fork\)", message)
-                if match:
+                if match := re.search(r"\(([^)]*)\s*fork\)", message):
                     retVal = retVal.replace(match.group(1), colored(match.group(1), color="lightgrey"))
 
-                if not any(_ in message for _ in ("Payload: ",)):
+                if all(_ not in message for _ in ("Payload: ",)):
                     for match in re.finditer(r"([^\w])'([^\n']+)'", message):  # single-quoted (Note: watch-out for the banner)
                         retVal = retVal.replace(match.group(0), "%s'%s'" % (match.group(1), colored(match.group(2), color="lightgrey")))
 
@@ -1012,33 +1006,31 @@ def dataToStdout(data, forceOutput=False, bold=False, contentType=None, status=C
     """
 
     if not IS_TTY and isinstance(data, six.string_types) and data.startswith("\r"):
-        if re.search(r"\(\d+%\)", data):
-            data = ""
-        else:
-            data = "\n%s" % data.strip("\r")
+        data = "" if re.search(r"\(\d+%\)", data) else "\n%s" % data.strip("\r")
+    if not kb.get("threadException") and (
+        forceOutput
+        or not (getCurrentThreadData().disableStdOut or kb.get("wizardMode"))
+    ):
+        multiThreadMode = kb.get("multiThreadMode")
+        if multiThreadMode:
+            logging._acquireLock()
 
-    if not kb.get("threadException"):
-        if forceOutput or not (getCurrentThreadData().disableStdOut or kb.get("wizardMode")):
-            multiThreadMode = kb.get("multiThreadMode")
-            if multiThreadMode:
-                logging._acquireLock()
+        try:
+            if conf.get("api"):
+                sys.stdout.write(stdoutEncode(clearColors(data)), status, contentType)
+            else:
+                sys.stdout.write(stdoutEncode(setColor(data, bold=bold) if coloring else clearColors(data)))
+        except IOError:
+            pass
+        except UnicodeEncodeError:
+            sys.stdout.write(re.sub(r"[^ -~]", '?', clearColors(data)))
+        finally:
+            sys.stdout.flush()
 
-            try:
-                if conf.get("api"):
-                    sys.stdout.write(stdoutEncode(clearColors(data)), status, contentType)
-                else:
-                    sys.stdout.write(stdoutEncode(setColor(data, bold=bold) if coloring else clearColors(data)))
-            except IOError:
-                pass
-            except UnicodeEncodeError:
-                sys.stdout.write(re.sub(r"[^ -~]", '?', clearColors(data)))
-            finally:
-                sys.stdout.flush()
+        if multiThreadMode:
+            logging._releaseLock()
 
-            if multiThreadMode:
-                logging._releaseLock()
-
-            kb.prependFlag = isinstance(data, six.string_types) and (len(data) == 1 and data not in ('\n', '\r') or len(data) > 2 and data[0] == '\r' and data[-1] != '\n')
+        kb.prependFlag = isinstance(data, six.string_types) and (len(data) == 1 and data not in ('\n', '\r') or len(data) > 2 and data[0] == '\r' and data[-1] != '\n')
 
 def dataToTrafficFile(data):
     if not conf.trafficFile:
@@ -1059,13 +1051,12 @@ def dataToDumpFile(dumpFile, data):
     except IOError as ex:
         if "No space left" in getUnicode(ex):
             errMsg = "no space left on output device"
-            logger.error(errMsg)
         elif "Permission denied" in getUnicode(ex):
             errMsg = "permission denied when flushing dump data"
-            logger.error(errMsg)
         else:
             errMsg = "error occurred when writing dump data to file ('%s')" % getUnicode(ex)
-            logger.error(errMsg)
+
+        logger.error(errMsg)
 
 def dataToOutFile(filename, data):
     """
@@ -1123,7 +1114,7 @@ def readInput(message, default=None, checkBatch=True, boolean=False):
         kb.prependFlag = False
 
     if conf.get("answers"):
-        if not any(_ in conf.answers for _ in ",="):
+        if all(_ not in conf.answers for _ in ",="):
             return conf.answers
 
         for item in conf.answers.split(','):
@@ -1188,11 +1179,7 @@ def readInput(message, default=None, checkBatch=True, boolean=False):
     if retVal and default and isinstance(default, six.string_types) and len(default) == 1:
         retVal = retVal.strip()
 
-    if boolean:
-        retVal = retVal.strip().upper() == 'Y'
-    else:
-        retVal = retVal or ""
-
+    retVal = retVal.strip().upper() == 'Y' if boolean else retVal or ""
     return retVal
 
 def setTechnique(technique):
@@ -1262,13 +1249,11 @@ def randomStr(length=4, lowercase=False, alphabet=None, seed=None):
         choice = random.choice
 
     if alphabet:
-        retVal = "".join(choice(alphabet) for _ in xrange(0, length))
+        return "".join(choice(alphabet) for _ in xrange(0, length))
     elif lowercase:
-        retVal = "".join(choice(string.ascii_lowercase) for _ in xrange(0, length))
+        return "".join(choice(string.ascii_lowercase) for _ in xrange(0, length))
     else:
-        retVal = "".join(choice(string.ascii_letters) for _ in xrange(0, length))
-
-    return retVal
+        return "".join(choice(string.ascii_letters) for _ in xrange(0, length))
 
 def sanitizeStr(value):
     """
@@ -1350,19 +1335,18 @@ def checkFile(filename, raiseOnError=True):
 
     if filename == STDIN_PIPE_DASH:
         return checkPipedInput()
-    else:
+    try:
+        if filename is None or not os.path.isfile(filename):
+            valid = False
+    except:
+        valid = False
+
+    if valid:
         try:
-            if filename is None or not os.path.isfile(filename):
-                valid = False
+            with open(filename, "rb"):
+                pass
         except:
             valid = False
-
-        if valid:
-            try:
-                with open(filename, "rb"):
-                    pass
-            except:
-                valid = False
 
     if not valid and raiseOnError:
         raise SqlmapSystemException("unable to read file '%s'" % filename)
@@ -1374,7 +1358,9 @@ def banner():
     This function prints sqlmap banner with its version
     """
 
-    if not any(_ in sys.argv for _ in ("--version", "--api")) and not conf.get("disableBanner"):
+    if all(_ not in sys.argv for _ in ("--version", "--api")) and not conf.get(
+        "disableBanner"
+    ):
         result = BANNER
 
         if not IS_TTY or any(_ in sys.argv for _ in ("--disable-coloring", "--disable-colouring")):
@@ -1563,12 +1549,11 @@ def parseTargetDirect():
             if details.group("credentials"):
                 conf.dbmsUser = details.group("user").strip("'\"")
                 conf.dbmsPass = details.group("pass").strip("'\"")
+            elif conf.dbmsCred:
+                conf.dbmsUser, conf.dbmsPass = conf.dbmsCred.split(':')
             else:
-                if conf.dbmsCred:
-                    conf.dbmsUser, conf.dbmsPass = conf.dbmsCred.split(':')
-                else:
-                    conf.dbmsUser = ""
-                    conf.dbmsPass = ""
+                conf.dbmsUser = ""
+                conf.dbmsPass = ""
 
             if not conf.dbmsPass:
                 conf.dbmsPass = None
@@ -1590,8 +1575,11 @@ def parseTargetDirect():
         return
 
     if not details:
-        errMsg = "invalid target details, valid syntax is for instance "
-        errMsg += "'mysql://USER:PASSWORD@DBMS_IP:DBMS_PORT/DATABASE_NAME' "
+        errMsg = (
+            "invalid target details, valid syntax is for instance "
+            + "'mysql://USER:PASSWORD@DBMS_IP:DBMS_PORT/DATABASE_NAME' "
+        )
+
         errMsg += "or 'access://DATABASE_FILEPATH'"
         raise SqlmapSyntaxException(errMsg)
 
@@ -1609,8 +1597,11 @@ def parseTargetDirect():
                         conf.hostname = "localhost"
                         conf.port = 0
                 elif not remote:
-                    errMsg = "missing remote connection details (e.g. "
-                    errMsg += "'mysql://USER:PASSWORD@DBMS_IP:DBMS_PORT/DATABASE_NAME' "
+                    errMsg = (
+                        "missing remote connection details (e.g. "
+                        + "'mysql://USER:PASSWORD@DBMS_IP:DBMS_PORT/DATABASE_NAME' "
+                    )
+
                     errMsg += "or 'access://DATABASE_FILEPATH')"
                     raise SqlmapSyntaxException(errMsg)
 
@@ -1643,9 +1634,14 @@ def parseTargetDirect():
             except (SqlmapSyntaxException, SqlmapMissingDependence):
                 raise
             except:
-                if _sqlalchemy and data[3] and any(_ in _sqlalchemy.dialects.__all__ for _ in (data[3], data[3].split('+')[0])):
-                    pass
-                else:
+                if (
+                    not _sqlalchemy
+                    or not data[3]
+                    or all(
+                        _ not in _sqlalchemy.dialects.__all__
+                        for _ in (data[3], data[3].split('+')[0])
+                    )
+                ):
                     errMsg = "sqlmap requires '%s' third-party library " % data[1]
                     errMsg += "in order to directly connect to the DBMS "
                     errMsg += "'%s'. You can download it from '%s'" % (dbmsName, data[2])

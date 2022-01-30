@@ -391,9 +391,7 @@ def processResponse(page, responseHeaders, code=None, status=None):
         kb.tableFrom = None
 
     if conf.parseErrors:
-        msg = extractErrorMessage(page)
-
-        if msg:
+        if msg := extractErrorMessage(page):
             logger.warning("parsed DBMS error message: '%s'" % msg.rstrip('.'))
 
     if not conf.skipWaf and kb.processResponseCounter < IDENTYWAF_PARSE_LIMIT:
@@ -415,13 +413,12 @@ def processResponse(page, responseHeaders, code=None, status=None):
                 if PLACE.POST in conf.paramDict and name in conf.paramDict[PLACE.POST]:
                     if conf.paramDict[PLACE.POST][name] in page:
                         continue
-                    else:
-                        msg = "do you want to automatically adjust the value of '%s'? [y/N]" % name
+                    msg = "do you want to automatically adjust the value of '%s'? [y/N]" % name
 
-                        if not readInput(msg, default='N', boolean=True):
-                            continue
+                    if not readInput(msg, default='N', boolean=True):
+                        continue
 
-                        conf.paramDict[PLACE.POST][name] = value
+                    conf.paramDict[PLACE.POST][name] = value
                 conf.parameters[PLACE.POST] = re.sub(r"(?i)(%s=)[^&]+" % re.escape(name), r"\g<1>%s" % value.replace('\\', r'\\'), conf.parameters[PLACE.POST])
 
     if not kb.browserVerification and re.search(r"(?i)browser.?verification", page or ""):

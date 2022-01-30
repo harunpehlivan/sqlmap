@@ -39,8 +39,11 @@ def update():
     success = False
 
     if TYPE == "pip":
-        infoMsg = "updating sqlmap to the latest stable version from the "
-        infoMsg += "PyPI repository"
+        infoMsg = (
+            "updating sqlmap to the latest stable version from the "
+            + "PyPI repository"
+        )
+
         logger.info(infoMsg)
 
         debugMsg = "sqlmap will try to update itself using 'pip' command"
@@ -126,8 +129,11 @@ def update():
                                 logger.warning("could not set the file attributes of '%s'" % os.path.join(directory, "sqlmap.py"))
 
     else:
-        infoMsg = "updating sqlmap to the latest development revision from the "
-        infoMsg += "GitHub repository"
+        infoMsg = (
+            "updating sqlmap to the latest development revision from the "
+            + "GitHub repository"
+        )
+
         logger.info(infoMsg)
 
         debugMsg = "sqlmap will try to update itself using 'git' command"
@@ -149,23 +155,27 @@ def update():
 
         if success:
             logger.info("%s the latest revision '%s'" % ("already at" if "Already" in output else "updated to", getRevisionNumber()))
+        elif "Not a git repository" in output:
+            errMsg = "not a valid git repository. Please checkout the 'sqlmapproject/sqlmap' repository "
+            errMsg += "from GitHub (e.g. 'git clone --depth 1 %s sqlmap')" % GIT_REPOSITORY
+            logger.error(errMsg)
         else:
-            if "Not a git repository" in output:
-                errMsg = "not a valid git repository. Please checkout the 'sqlmapproject/sqlmap' repository "
-                errMsg += "from GitHub (e.g. 'git clone --depth 1 %s sqlmap')" % GIT_REPOSITORY
-                logger.error(errMsg)
-            else:
-                logger.error("update could not be completed ('%s')" % re.sub(r"\W+", " ", output).strip())
+            logger.error("update could not be completed ('%s')" % re.sub(r"\W+", " ", output).strip())
 
     if not success:
         if IS_WIN:
-            infoMsg = "for Windows platform it's recommended "
-            infoMsg += "to use a GitHub for Windows client for updating "
+            infoMsg = (
+                "for Windows platform it's recommended "
+                + "to use a GitHub for Windows client for updating "
+            )
+
             infoMsg += "purposes (https://desktop.github.com/) or just "
             infoMsg += "download the latest snapshot from "
             infoMsg += "https://github.com/sqlmapproject/sqlmap/downloads"
         else:
-            infoMsg = "for Linux platform it's recommended "
-            infoMsg += "to install a standard 'git' package (e.g.: 'apt install git')"
+            infoMsg = (
+                "for Linux platform it's recommended "
+                + "to install a standard 'git' package (e.g.: 'apt install git')"
+            )
 
         logger.info(infoMsg)

@@ -69,20 +69,15 @@ def main():
         print('ERROR: the provided input file \'%s\' is non existent' % args.inputFile)
         sys.exit(1)
 
-    if not args.decrypt:
-        data = cloak(args.inputFile)
-    else:
-        data = decloak(args.inputFile)
-
+    data = cloak(args.inputFile) if not args.decrypt else decloak(args.inputFile)
     if not args.outputFile:
         if not args.decrypt:
             args.outputFile = args.inputFile + '_'
         else:
             args.outputFile = args.inputFile[:-1]
 
-    f = open(args.outputFile, 'wb')
-    f.write(data)
-    f.close()
+    with open(args.outputFile, 'wb') as f:
+        f.write(data)
 
 if __name__ == '__main__':
     main()

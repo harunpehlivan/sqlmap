@@ -496,9 +496,7 @@ def checkSqlInjection(place, parameter, value):
                                 # string
                                 boundPayload = agent.prefixQuery(sndPayload, prefix, where, clause)
                                 boundPayload = agent.suffixQuery(boundPayload, comment, suffix, where)
-                                cmpPayload = agent.payload(place, parameter, newValue=boundPayload, where=where)
-
-                                return cmpPayload
+                                return agent.payload(place, parameter, newValue=boundPayload, where=where)
 
                             # Useful to set kb.matchRatio at first based on False response content
                             kb.matchRatio = None
@@ -896,15 +894,29 @@ def heuristicCheckDbms(injection):
 
         if dbms in HEURISTIC_NULL_EVAL:
             result = checkBooleanExpression("(SELECT %s%s) IS NULL" % (HEURISTIC_NULL_EVAL[dbms], FROM_DUMMY_TABLE.get(dbms, "")))
-        elif not ((randStr1 in unescaper.escape("'%s'" % randStr1)) and list(FROM_DUMMY_TABLE.values()).count(FROM_DUMMY_TABLE.get(dbms, "")) != 1):
+        elif (
+            randStr1 not in unescaper.escape("'%s'" % randStr1)
+            or list(FROM_DUMMY_TABLE.values()).count(
+                FROM_DUMMY_TABLE.get(dbms, "")
+            )
+            == 1
+        ):
             result = checkBooleanExpression("(SELECT '%s'%s)=%s%s%s" % (randStr1, FROM_DUMMY_TABLE.get(dbms, ""), SINGLE_QUOTE_MARKER, randStr1, SINGLE_QUOTE_MARKER))
         else:
             result = False
 
-        if result:
-            if not checkBooleanExpression("(SELECT '%s'%s)=%s%s%s" % (randStr1, FROM_DUMMY_TABLE.get(dbms, ""), SINGLE_QUOTE_MARKER, randStr2, SINGLE_QUOTE_MARKER)):
-                retVal = dbms
-                break
+        if result and not checkBooleanExpression(
+            "(SELECT '%s'%s)=%s%s%s"
+            % (
+                randStr1,
+                FROM_DUMMY_TABLE.get(dbms, ""),
+                SINGLE_QUOTE_MARKER,
+                randStr2,
+                SINGLE_QUOTE_MARKER,
+            )
+        ):
+            retVal = dbms
+            break
 
     Backend.flushForcedDbms()
     kb.injection = popValue()
@@ -991,23 +1003,27 @@ def checkSuhosinPatch(injection):
     Checks for existence of Suhosin-patch (and alike) protection mechanism(s)
     """
 
-    if injection.place in (PLACE.GET, PLACE.URI):
-        debugMsg = "checking for parameter length "
-        debugMsg += "constraining mechanisms"
-        logger.debug(debugMsg)
+    if injection.place not in (PLACE.GET, PLACE.URI):
+        return
 
-        pushValue(kb.injection)
+    debugMsg = "checking for parameter length " + "constraining mechanisms"
+    logger.debug(debugMsg)
 
-        kb.injection = injection
-        randInt = randomInt()
+    pushValue(kb.injection)
 
-        if not checkBooleanExpression("%d=%s%d" % (randInt, ' ' * SUHOSIN_MAX_VALUE_LENGTH, randInt)):
-            warnMsg = "parameter length constraining "
-            warnMsg += "mechanism detected (e.g. Suhosin patch). "
-            warnMsg += "Potential problems in enumeration phase can be expected"
-            logger.warn(warnMsg)
+    kb.injection = injection
+    randInt = randomInt()
 
-        kb.injection = popValue()
+    if not checkBooleanExpression("%d=%s%d" % (randInt, ' ' * SUHOSIN_MAX_VALUE_LENGTH, randInt)):
+        warnMsg = (
+            "parameter length constraining "
+            + "mechanism detected (e.g. Suhosin patch). "
+        )
+
+        warnMsg += "Potential problems in enumeration phase can be expected"
+        logger.warn(warnMsg)
+
+    kb.injection = popValue()
 
 @stackedmethod
 def checkFilteredChars(injection):
@@ -1020,21 +1036,36 @@ def checkFilteredChars(injection):
     randInt = randomInt()
 
     # all other techniques are already using parentheses in tests
-    if len(injection.data) == 1 and PAYLOAD.TECHNIQUE.BOOLEAN in injection.data:
-        if not checkBooleanExpression("(%d)=%d" % (randInt, randInt)):
-            warnMsg = "it appears that some non-alphanumeric characters (i.e. ()) are "
-            warnMsg += "filtered by the back-end server. There is a strong "
-            warnMsg += "possibility that sqlmap won't be able to properly "
-            warnMsg += "exploit this vulnerability"
-            logger.warn(warnMsg)
+    if (
+        len(injection.data) == 1
+        and PAYLOAD.TECHNIQUE.BOOLEAN in injection.data
+        and not checkBooleanExpression("(%d)=%d" % (randInt, randInt))
+    ):
+        warnMsg = (
+            "it appears that some non-alphanumeric characters (i.e. ()) are "
+            + "filtered by the back-end server. There is a strong "
+        )
+
+        warnMsg += "possibility that sqlmap won't be able to properly "
+        warnMsg += "exploit this vulnerability"
+        logger.warn(warnMsg)
 
     # inference techniques depend on character '>'
-    if not any(_ in injection.data for _ in (PAYLOAD.TECHNIQUE.ERROR, PAYLOAD.TECHNIQUE.UNION, PAYLOAD.TECHNIQUE.QUERY)):
-        if not checkBooleanExpression("%d>%d" % (randInt + 1, randInt)):
-            warnMsg = "it appears that the character '>' is "
-            warnMsg += "filtered by the back-end server. You are strongly "
-            warnMsg += "advised to rerun with the '--tamper=between'"
-            logger.warn(warnMsg)
+    if all(
+        _ not in injection.data
+        for _ in (
+            PAYLOAD.TECHNIQUE.ERROR,
+            PAYLOAD.TECHNIQUE.UNION,
+            PAYLOAD.TECHNIQUE.QUERY,
+        )
+    ) and not checkBooleanExpression("%d>%d" % (randInt + 1, randInt)):
+        warnMsg = (
+            "it appears that the character '>' is "
+            + "filtered by the back-end server. You are strongly "
+        )
+
+        warnMsg += "advised to rerun with the '--tamper=between'"
+        logger.warn(warnMsg)
 
     kb.injection = popValue()
 
@@ -1197,14 +1228,12 @@ def checkDynamicContent(firstPage, secondPage):
     """
 
     if kb.nullConnection:
-        debugMsg = "dynamic content checking skipped "
-        debugMsg += "because NULL connection used"
+        debugMsg = "dynamic content checking skipped " + "because NULL connection used"
         logger.debug(debugMsg)
         return
 
     if any(page is None for page in (firstPage, secondPage)):
-        warnMsg = "can't check dynamic content "
-        warnMsg += "because of lack of page content"
+        warnMsg = "can't check dynamic content " + "because of lack of page content"
         logger.critical(warnMsg)
         return
 
@@ -1222,7 +1251,6 @@ def checkDynamicContent(firstPage, secondPage):
     if ratio is None:
         kb.skipSeqMatcher = True
 
-    # In case of an intolerable difference turn on dynamicity removal engine
     elif ratio <= UPPER_RATIO_BOUND:
         findDynamicContent(firstPage, secondPage)
 
@@ -1231,15 +1259,21 @@ def checkDynamicContent(firstPage, secondPage):
             count += 1
 
             if count > conf.retries:
-                warnMsg = "target URL content appears to be too dynamic. "
-                warnMsg += "Switching to '--text-only' "
+                warnMsg = (
+                    "target URL content appears to be too dynamic. "
+                    + "Switching to '--text-only' "
+                )
+
                 logger.warn(warnMsg)
 
                 conf.textOnly = True
                 return
 
-            warnMsg = "target URL content appears to be heavily dynamic. "
-            warnMsg += "sqlmap is going to retry the request(s)"
+            warnMsg = (
+                "target URL content appears to be heavily dynamic. "
+                + "sqlmap is going to retry the request(s)"
+            )
+
             singleTimeLogMessage(warnMsg, logging.CRITICAL)
 
             kb.heavilyDynamic = True
@@ -1279,15 +1313,21 @@ def checkStability():
             infoMsg = "target URL content is stable"
             logger.info(infoMsg)
         else:
-            errMsg = "there was an error checking the stability of page "
-            errMsg += "because of lack of content. Please check the "
+            errMsg = (
+                "there was an error checking the stability of page "
+                + "because of lack of content. Please check the "
+            )
+
             errMsg += "page request results (and probable errors) by "
             errMsg += "using higher verbosity levels"
             logger.error(errMsg)
 
     else:
-        warnMsg = "target URL content is not stable (i.e. content differs). sqlmap will base the page "
-        warnMsg += "comparison on a sequence matcher. If no dynamic nor "
+        warnMsg = (
+            "target URL content is not stable (i.e. content differs). sqlmap will base the page "
+            + "comparison on a sequence matcher. If no dynamic nor "
+        )
+
         warnMsg += "injectable parameters are detected, or in case of "
         warnMsg += "junk results, refer to user's manual paragraph "
         warnMsg += "'Page comparison'"
@@ -1303,38 +1343,32 @@ def checkStability():
             showStaticWords(firstPage, secondPage)
 
             message = "please enter value for parameter 'string': "
-            string = readInput(message)
+            if not (string := readInput(message)):
+                raise SqlmapNoneDataException("Empty value supplied")
 
-            if string:
-                conf.string = string
+            conf.string = string
 
-                if kb.nullConnection:
-                    debugMsg = "turning off NULL connection "
-                    debugMsg += "support because of string checking"
-                    logger.debug(debugMsg)
+            if kb.nullConnection:
+                debugMsg = (
+                    "turning off NULL connection "
+                    + "support because of string checking"
+                )
 
-                    kb.nullConnection = None
-            else:
-                errMsg = "Empty value supplied"
-                raise SqlmapNoneDataException(errMsg)
+                logger.debug(debugMsg)
 
+                kb.nullConnection = None
         elif choice == 'R':
             message = "please enter value for parameter 'regex': "
-            regex = readInput(message)
+            if not (regex := readInput(message)):
+                raise SqlmapNoneDataException("Empty value supplied")
 
-            if regex:
-                conf.regex = regex
+            conf.regex = regex
 
-                if kb.nullConnection:
-                    debugMsg = "turning off NULL connection "
-                    debugMsg += "support because of regex checking"
-                    logger.debug(debugMsg)
+            if kb.nullConnection:
+                debugMsg = "turning off NULL connection " + "support because of regex checking"
+                logger.debug(debugMsg)
 
-                    kb.nullConnection = None
-            else:
-                errMsg = "Empty value supplied"
-                raise SqlmapNoneDataException(errMsg)
-
+                kb.nullConnection = None
         else:
             checkDynamicContent(firstPage, secondPage)
 
@@ -1344,8 +1378,11 @@ def checkString():
     if not conf.string:
         return True
 
-    infoMsg = "testing if the provided string is within the "
-    infoMsg += "target URL page content"
+    infoMsg = (
+        "testing if the provided string is within the "
+        + "target URL page content"
+    )
+
     logger.info(infoMsg)
 
     page, headers, _ = Request.queryPage(content=True)
@@ -1363,8 +1400,11 @@ def checkRegexp():
     if not conf.regexp:
         return True
 
-    infoMsg = "testing if the provided regular expression matches within "
-    infoMsg += "the target URL page content"
+    infoMsg = (
+        "testing if the provided regular expression matches within "
+        + "the target URL page content"
+    )
+
     logger.info(infoMsg)
 
     page, headers, _ = Request.queryPage(content=True)
@@ -1393,16 +1433,18 @@ def checkWaf():
     _ = hashDBRetrieve(HASHDB_KEYS.CHECK_WAF_RESULT, True)
     if _ is not None:
         if _:
-            warnMsg = "previous heuristics detected that the target "
-            warnMsg += "is protected by some kind of WAF/IPS"
+            warnMsg = (
+                "previous heuristics detected that the target "
+                + "is protected by some kind of WAF/IPS"
+            )
+
             logger.critical(warnMsg)
         return _
 
     if not kb.originalPage:
         return None
 
-    infoMsg = "checking if the target is protected by "
-    infoMsg += "some kind of WAF/IPS"
+    infoMsg = "checking if the target is protected by " + "some kind of WAF/IPS"
     logger.info(infoMsg)
 
     retVal = False
@@ -1439,20 +1481,23 @@ def checkWaf():
 
     if retVal:
         if not kb.identifiedWafs:
-            warnMsg = "heuristics detected that the target "
-            warnMsg += "is protected by some kind of WAF/IPS"
+            warnMsg = (
+                "heuristics detected that the target "
+                + "is protected by some kind of WAF/IPS"
+            )
+
             logger.critical(warnMsg)
 
-        message = "are you sure that you want to "
-        message += "continue with further target testing? [Y/n] "
-        choice = readInput(message, default='Y', boolean=True)
+        message = (
+            "are you sure that you want to "
+            + "continue with further target testing? [Y/n] "
+        )
 
-        if not choice:
+        if not (choice := readInput(message, default='Y', boolean=True)):
             raise SqlmapUserQuitException
-        else:
-            if not conf.tamper:
-                warnMsg = "please consider usage of tamper scripts (option '--tamper')"
-                singleTimeWarnMessage(warnMsg)
+        if not conf.tamper:
+            warnMsg = "please consider usage of tamper scripts (option '--tamper')"
+            singleTimeWarnMessage(warnMsg)
 
     return retVal
 
@@ -1518,23 +1563,24 @@ def checkNullConnection():
 def checkConnection(suppressOutput=False):
     threadData = getCurrentThreadData()
 
-    if not re.search(r"\A\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\Z", conf.hostname):
-        if not any((conf.proxy, conf.tor, conf.dummy, conf.offline)):
-            try:
-                debugMsg = "resolving hostname '%s'" % conf.hostname
-                logger.debug(debugMsg)
-                socket.getaddrinfo(conf.hostname, None)
-            except socket.gaierror:
-                errMsg = "host '%s' does not exist" % conf.hostname
-                raise SqlmapConnectionException(errMsg)
-            except socket.error as ex:
-                errMsg = "problem occurred while "
-                errMsg += "resolving a host name '%s' ('%s')" % (conf.hostname, getSafeExString(ex))
-                raise SqlmapConnectionException(errMsg)
-            except UnicodeError as ex:
-                errMsg = "problem occurred while "
-                errMsg += "handling a host name '%s' ('%s')" % (conf.hostname, getSafeExString(ex))
-                raise SqlmapDataException(errMsg)
+    if not re.search(
+        r"\A\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\Z", conf.hostname
+    ) and not any((conf.proxy, conf.tor, conf.dummy, conf.offline)):
+        try:
+            debugMsg = "resolving hostname '%s'" % conf.hostname
+            logger.debug(debugMsg)
+            socket.getaddrinfo(conf.hostname, None)
+        except socket.gaierror:
+            errMsg = "host '%s' does not exist" % conf.hostname
+            raise SqlmapConnectionException(errMsg)
+        except socket.error as ex:
+            errMsg = "problem occurred while "
+            errMsg += "resolving a host name '%s' ('%s')" % (conf.hostname, getSafeExString(ex))
+            raise SqlmapConnectionException(errMsg)
+        except UnicodeError as ex:
+            errMsg = "problem occurred while "
+            errMsg += "handling a host name '%s' ('%s')" % (conf.hostname, getSafeExString(ex))
+            raise SqlmapDataException(errMsg)
 
     if not suppressOutput and not conf.dummy and not conf.offline:
         infoMsg = "testing connection to the target URL"
@@ -1555,8 +1601,11 @@ def checkConnection(suppressOutput=False):
                 errMsg = "unable to retrieve page content"
                 raise SqlmapConnectionException(errMsg)
         elif wasLastResponseDBMSError():
-            warnMsg = "there is a DBMS error found in the HTTP response body "
-            warnMsg += "which could interfere with the results of the tests"
+            warnMsg = (
+                "there is a DBMS error found in the HTTP response body "
+                + "which could interfere with the results of the tests"
+            )
+
             logger.warn(warnMsg)
         elif wasLastResponseHTTPError():
             if getLastRequestHTTPError() not in (conf.ignoreCode or []):
@@ -1566,41 +1615,55 @@ def checkConnection(suppressOutput=False):
         else:
             kb.errorIsNone = True
 
-        if kb.choices.redirect == REDIRECTION.YES and threadData.lastRedirectURL and threadData.lastRedirectURL[0] == threadData.lastRequestUID:
-            if (threadData.lastRedirectURL[1] or "").startswith("https://") and conf.hostname in getUnicode(threadData.lastRedirectURL[1]):
-                conf.url = re.sub(r"https?://", "https://", conf.url)
-                match = re.search(r":(\d+)", threadData.lastRedirectURL[1])
-                port = match.group(1) if match else 443
-                conf.url = re.sub(r":\d+(/|\Z)", r":%s\g<1>" % port, conf.url)
+        if (
+            kb.choices.redirect == REDIRECTION.YES
+            and threadData.lastRedirectURL
+            and threadData.lastRedirectURL[0] == threadData.lastRequestUID
+            and (threadData.lastRedirectURL[1] or "").startswith("https://")
+            and conf.hostname in getUnicode(threadData.lastRedirectURL[1])
+        ):
+            conf.url = re.sub(r"https?://", "https://", conf.url)
+            match = re.search(r":(\d+)", threadData.lastRedirectURL[1])
+            port = match.group(1) if match else 443
+            conf.url = re.sub(r":\d+(/|\Z)", r":%s\g<1>" % port, conf.url)
 
     except SqlmapConnectionException as ex:
         if conf.ipv6:
-            warnMsg = "check connection to a provided "
-            warnMsg += "IPv6 address with a tool like ping6 "
+            warnMsg = (
+                "check connection to a provided "
+                + "IPv6 address with a tool like ping6 "
+            )
+
             warnMsg += "(e.g. 'ping6 -I eth0 %s') " % conf.hostname
             warnMsg += "prior to running sqlmap to avoid "
             warnMsg += "any addressing issues"
             singleTimeWarnMessage(warnMsg)
 
-        if any(code in kb.httpErrorCodes for code in (_http_client.NOT_FOUND, )):
-            errMsg = getSafeExString(ex)
-            logger.critical(errMsg)
-
-            if conf.multipleTargets:
-                return False
-
-            msg = "it is not recommended to continue in this kind of cases. Do you want to quit and make sure that everything is set up properly? [Y/n] "
-            if readInput(msg, default='Y', boolean=True):
-                raise SqlmapSilentQuitException
-            else:
-                kb.ignoreNotFound = True
-        else:
+        if all(
+            code not in kb.httpErrorCodes for code in (_http_client.NOT_FOUND,)
+        ):
             raise
+        errMsg = getSafeExString(ex)
+        logger.critical(errMsg)
+
+        if conf.multipleTargets:
+            return False
+
+        msg = "it is not recommended to continue in this kind of cases. Do you want to quit and make sure that everything is set up properly? [Y/n] "
+        if readInput(msg, default='Y', boolean=True):
+            raise SqlmapSilentQuitException
+        else:
+            kb.ignoreNotFound = True
     finally:
         kb.originalPage = kb.pageTemplate = threadData.lastPage
         kb.originalCode = threadData.lastCode
 
-    if conf.cj and not conf.cookie and not any(_[0] == HTTP_HEADER.COOKIE for _ in conf.httpHeaders) and not conf.dropSetCookie:
+    if (
+        conf.cj
+        and not conf.cookie
+        and all(_[0] != HTTP_HEADER.COOKIE for _ in conf.httpHeaders)
+        and not conf.dropSetCookie
+    ):
         candidate = DEFAULT_COOKIE_DELIMITER.join("%s=%s" % (_.name, _.value) for _ in conf.cj)
 
         message = "you have not declared cookie(s), while "

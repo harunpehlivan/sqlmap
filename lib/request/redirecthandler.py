@@ -55,8 +55,7 @@ class SmartRedirectHandler(_urllib.request.HTTPRedirectHandler):
                 kb.choices.redirect = REDIRECTION.YES if readInput(msg, default='Y', boolean=True) else REDIRECTION.NO
 
             if kb.choices.redirect == REDIRECTION.YES and method == HTTPMETHOD.POST and kb.resendPostOnRedirect is None:
-                msg = "redirect is a result of a "
-                msg += "POST request. Do you want to "
+                msg = "redirect is a result of a " + "POST request. Do you want to "
                 msg += "resend original POST data to a new "
                 msg += "location? [%s] " % ("Y/n" if not kb.originalPage else "y/N")
 
@@ -190,6 +189,9 @@ class SmartRedirectHandler(_urllib.request.HTTPRedirectHandler):
 
     def _infinite_loop_check(self, req):
         if hasattr(req, 'redirect_dict') and (req.redirect_dict.get(req.get_full_url(), 0) >= MAX_SINGLE_URL_REDIRECTIONS or len(req.redirect_dict) >= MAX_TOTAL_REDIRECTIONS):
-            errMsg = "infinite redirect loop detected (%s). " % ", ".join(item for item in req.redirect_dict.keys())
+            errMsg = "infinite redirect loop detected (%s). " % ", ".join(
+                req.redirect_dict.keys()
+            )
+
             errMsg += "Please check all provided parameters and/or provide missing ones"
             raise SqlmapConnectionException(errMsg)

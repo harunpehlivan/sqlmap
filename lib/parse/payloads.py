@@ -29,12 +29,8 @@ def cleanupVals(text, tag):
         text = int(text)
 
     elif isinstance(text, list):
-        count = 0
-
-        for _ in text:
+        for count, _ in enumerate(text):
             text[count] = int(_) if _.isdigit() else _
-            count += 1
-
         if len(text) == 1 and tag not in ("clause", "where"):
             text = text[0]
 

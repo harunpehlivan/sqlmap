@@ -225,13 +225,11 @@ class Agent(object):
 
                 if match:
                     while True:
-                        _ = re.search(r"\\g<([^>]+)>", repl)
-                        if _:
-                            try:
-                                repl = repl.replace(_.group(0), match.group(int(_.group(1)) if _.group(1).isdigit() else _.group(1)))
-                            except IndexError:
-                                break
-                        else:
+                        if not (_ := re.search(r"\\g<([^>]+)>", repl)):
+                            break
+                        try:
+                            repl = repl.replace(_.group(0), match.group(int(_.group(1)) if _.group(1).isdigit() else _.group(1)))
+                        except IndexError:
                             break
                     retVal = string[:match.start()] + repl + string[match.end():]
                 return retVal
@@ -275,16 +273,13 @@ class Agent(object):
         if where == PAYLOAD.WHERE.REPLACE and not conf.prefix:  # Note: https://github.com/sqlmapproject/sqlmap/issues/4030
             query = ""
 
-        # If the technique is stacked queries (<stype>) do not put a space
-        # after the prefix or it is in GROUP BY / ORDER BY (<clause>)
         elif getTechnique() == PAYLOAD.TECHNIQUE.STACKED:
             query = kb.injection.prefix
-        elif kb.injection.clause == [2, 3] or kb.injection.clause == [2] or kb.injection.clause == [3]:
+        elif kb.injection.clause in [[2, 3], [2], [3]]:
             query = kb.injection.prefix
-        elif clause == [2, 3] or clause == [2] or clause == [3]:
+        elif clause in [[2, 3], [2], [3]]:
             query = prefix
 
-        # In any other case prepend with the full prefix
         else:
             query = kb.injection.prefix or prefix or ""
 
@@ -319,9 +314,17 @@ class Agent(object):
             where = getTechniqueData().where if where is None else where
             comment = getTechniqueData().comment if comment is None else comment
 
-        if any((comment or "").startswith(_) for _ in ("--", GENERIC_SQL_COMMENT_MARKER)):
-            if Backend.getIdentifiedDbms() and not GENERIC_SQL_COMMENT.startswith(queries[Backend.getIdentifiedDbms()].comment.query):
-                comment = queries[Backend.getIdentifiedDbms()].comment.query
+        if (
+            any(
+                (comment or "").startswith(_)
+                for _ in ("--", GENERIC_SQL_COMMENT_MARKER)
+            )
+            and Backend.getIdentifiedDbms()
+            and not GENERIC_SQL_COMMENT.startswith(
+                queries[Backend.getIdentifiedDbms()].comment.query
+            )
+        ):
+            comment = queries[Backend.getIdentifiedDbms()].comment.query
 
         if comment is not None:
             expression += comment
@@ -375,19 +378,22 @@ class Agent(object):
             if Backend.getIdentifiedDbms() is not None:
                 inference = queries[Backend.getIdentifiedDbms()].inference
 
-                if "dbms_version" in inference:
-                    if isDBMSVersionAtLeast(inference.dbms_version):
-                        inferenceQuery = inference.query
-                    else:
-                        inferenceQuery = inference.query2
-                else:
+                if (
+                    "dbms_version" in inference
+                    and isDBMSVersionAtLeast(inference.dbms_version)
+                    or "dbms_version" not in inference
+                ):
                     inferenceQuery = inference.query
-
+                else:
+                    inferenceQuery = inference.query2
                 payload = payload.replace(INFERENCE_MARKER, inferenceQuery)
 
             elif not kb.testMode:
-                errMsg = "invalid usage of inference payload without "
-                errMsg += "knowledge of underlying DBMS"
+                errMsg = (
+                    "invalid usage of inference payload without "
+                    + "knowledge of underlying DBMS"
+                )
+
                 raise SqlmapNoneDataException(errMsg)
 
         return payload
@@ -471,8 +477,7 @@ class Agent(object):
         @rtype: C{str}
         """
 
-        match = re.search(r"(?i)(.+)( AS \w+)\Z", field)
-        if match:
+        if match := re.search(r"(?i)(.+)( AS \w+)\Z", field):
             field, suffix = match.groups()
         else:
             suffix = ""
@@ -485,7 +490,7 @@ class Agent(object):
             if field.startswith("(CASE") or field.startswith("(IIF") or conf.noCast:
                 nulledCastedField = field
             else:
-                if not (Backend.isDbms(DBMS.SQLITE) and not isDBMSVersionAtLeast('3')):
+                if not Backend.isDbms(DBMS.SQLITE) or isDBMSVersionAtLeast('3'):
                     nulledCastedField = rootQuery.cast.query % field
 
                 if re.search(r"COUNT\(", field) and Backend.getIdentifiedDbms() in (DBMS.RAIMA,):
@@ -541,20 +546,17 @@ class Agent(object):
             return fields
 
         if fields.startswith("(CASE") or fields.startswith("(IIF") or fields.startswith("SUBSTR") or fields.startswith("MID(") or re.search(r"\A'[^']+'\Z", fields):
-            nulledCastedConcatFields = fields
-        else:
-            fieldsSplitted = splitFields(fields)
-            dbmsDelimiter = queries[Backend.getIdentifiedDbms()].delimiter.query
-            nulledCastedFields = []
+            return fields
+        fieldsSplitted = splitFields(fields)
+        dbmsDelimiter = queries[Backend.getIdentifiedDbms()].delimiter.query
+        nulledCastedFields = []
 
-            for field in fieldsSplitted:
-                field = re.sub(r"(?i) AS \w+\Z", "", field)         # NOTE: fields such as "... AS type_name" have to be stripped from the alias part for this functionality to work
-                nulledCastedFields.append(self.nullAndCastField(field))
+        for field in fieldsSplitted:
+            field = re.sub(r"(?i) AS \w+\Z", "", field)         # NOTE: fields such as "... AS type_name" have to be stripped from the alias part for this functionality to work
+            nulledCastedFields.append(self.nullAndCastField(field))
 
-            delimiterStr = "%s'%s'%s" % (dbmsDelimiter, kb.chars.delimiter, dbmsDelimiter)
-            nulledCastedConcatFields = delimiterStr.join(field for field in nulledCastedFields)
-
-        return nulledCastedConcatFields
+        delimiterStr = "%s'%s'%s" % (dbmsDelimiter, kb.chars.delimiter, dbmsDelimiter)
+        return delimiterStr.join(iter(nulledCastedFields))
 
     def getFields(self, query):
         """
@@ -674,33 +676,36 @@ class Agent(object):
         @rtype: C{str}
         """
 
-        if unpack:
-            concatenatedQuery = ""
-            query = query.replace(", ", ',')
-            fieldsSelectFrom, fieldsSelect, fieldsNoSelect, fieldsSelectTop, fieldsSelectCase, _, fieldsToCastStr, fieldsExists = self.getFields(query)
-            castedFields = self.nullCastConcatFields(fieldsToCastStr)
-            concatenatedQuery = query.replace(fieldsToCastStr, castedFields, 1)
-        else:
+        if not unpack:
             return query
 
+        concatenatedQuery = ""
+        query = query.replace(", ", ',')
+        fieldsSelectFrom, fieldsSelect, fieldsNoSelect, fieldsSelectTop, fieldsSelectCase, _, fieldsToCastStr, fieldsExists = self.getFields(query)
+        castedFields = self.nullCastConcatFields(fieldsToCastStr)
+        concatenatedQuery = query.replace(fieldsToCastStr, castedFields, 1)
         if Backend.isDbms(DBMS.MYSQL):
-            if fieldsExists:
-                concatenatedQuery = concatenatedQuery.replace("SELECT ", "CONCAT('%s'," % kb.chars.start, 1)
-                concatenatedQuery += ",'%s')" % kb.chars.stop
-            elif fieldsSelectCase:
+            if (
+                fieldsExists
+                or fieldsSelectCase
+                or not fieldsSelectFrom
+                and fieldsSelect
+            ):
                 concatenatedQuery = concatenatedQuery.replace("SELECT ", "CONCAT('%s'," % kb.chars.start, 1)
                 concatenatedQuery += ",'%s')" % kb.chars.stop
             elif fieldsSelectFrom:
                 _ = unArrayizeValue(zeroDepthSearch(concatenatedQuery, " FROM "))
                 concatenatedQuery = "%s,'%s')%s" % (concatenatedQuery[:_].replace("SELECT ", "CONCAT('%s'," % kb.chars.start, 1), kb.chars.stop, concatenatedQuery[_:])
-            elif fieldsSelect:
-                concatenatedQuery = concatenatedQuery.replace("SELECT ", "CONCAT('%s'," % kb.chars.start, 1)
-                concatenatedQuery += ",'%s')" % kb.chars.stop
             elif fieldsNoSelect:
                 concatenatedQuery = "CONCAT('%s',%s,'%s')" % (kb.chars.start, concatenatedQuery, kb.chars.stop)
 
         elif Backend.getIdentifiedDbms() in (DBMS.PGSQL, DBMS.ORACLE, DBMS.SQLITE, DBMS.DB2, DBMS.FIREBIRD, DBMS.HSQLDB, DBMS.H2, DBMS.MONETDB, DBMS.DERBY, DBMS.VERTICA, DBMS.MCKOI, DBMS.PRESTO, DBMS.ALTIBASE, DBMS.MIMERSQL, DBMS.CRATEDB, DBMS.CUBRID, DBMS.CACHE, DBMS.EXTREMEDB, DBMS.FRONTBASE, DBMS.RAIMA, DBMS.VIRTUOSO):
-            if fieldsExists:
+            if (
+                fieldsExists
+                or not fieldsSelectCase
+                and not fieldsSelectFrom
+                and fieldsSelect
+            ):
                 concatenatedQuery = concatenatedQuery.replace("SELECT ", "'%s'||" % kb.chars.start, 1)
                 concatenatedQuery += "||'%s'" % kb.chars.stop
             elif fieldsSelectCase:
@@ -711,9 +716,6 @@ class Agent(object):
                 _ = unArrayizeValue(zeroDepthSearch(concatenatedQuery, " FROM "))
                 concatenatedQuery = "%s||'%s'%s" % (concatenatedQuery[:_], kb.chars.stop, concatenatedQuery[_:])
                 concatenatedQuery = re.sub(r"('%s'\|\|)(.+?)(%s)" % (kb.chars.start, re.escape(castedFields)), r"\g<2>\g<1>\g<3>", concatenatedQuery)
-            elif fieldsSelect:
-                concatenatedQuery = concatenatedQuery.replace("SELECT ", "'%s'||" % kb.chars.start, 1)
-                concatenatedQuery += "||'%s'" % kb.chars.stop
             elif fieldsNoSelect:
                 concatenatedQuery = "'%s'||%s||'%s'" % (kb.chars.start, concatenatedQuery, kb.chars.stop)
 
@@ -739,7 +741,12 @@ class Agent(object):
                 concatenatedQuery = "'%s'+%s+'%s'" % (kb.chars.start, concatenatedQuery, kb.chars.stop)
 
         elif Backend.isDbms(DBMS.ACCESS):
-            if fieldsExists:
+            if (
+                fieldsExists
+                or not fieldsSelectCase
+                and not fieldsSelectFrom
+                and fieldsSelect
+            ):
                 concatenatedQuery = concatenatedQuery.replace("SELECT ", "'%s'&" % kb.chars.start, 1)
                 concatenatedQuery += "&'%s'" % kb.chars.stop
             elif fieldsSelectCase:
@@ -749,9 +756,6 @@ class Agent(object):
                 concatenatedQuery = concatenatedQuery.replace("SELECT ", "'%s'&" % kb.chars.start, 1)
                 _ = unArrayizeValue(zeroDepthSearch(concatenatedQuery, " FROM "))
                 concatenatedQuery = "%s&'%s'%s" % (concatenatedQuery[:_], kb.chars.stop, concatenatedQuery[_:])
-            elif fieldsSelect:
-                concatenatedQuery = concatenatedQuery.replace("SELECT ", "'%s'&" % kb.chars.start, 1)
-                concatenatedQuery += "&'%s'" % kb.chars.stop
             elif fieldsNoSelect:
                 concatenatedQuery = "'%s'&%s&'%s'" % (kb.chars.start, concatenatedQuery, kb.chars.stop)
 
@@ -765,22 +769,20 @@ class Agent(object):
                     concatenatedQuery = _
                     fieldsSelectFrom = None
 
-            if fieldsExists:
-                concatenatedQuery = concatenatedQuery.replace("SELECT ", "CONCAT(CONCAT('%s'," % kb.chars.start, 1)
-                concatenatedQuery += "),'%s')" % kb.chars.stop
-            elif fieldsSelectCase:
+            if fieldsExists or fieldsSelectCase:
                 concatenatedQuery = concatenatedQuery.replace("SELECT ", "CONCAT(CONCAT('%s'," % kb.chars.start, 1)
                 concatenatedQuery += "),'%s')" % kb.chars.stop
             elif fieldsSelectFrom or fieldsSelect:
                 fromTable = ""
 
-                _ = unArrayizeValue(zeroDepthSearch(concatenatedQuery, " FROM "))
-                if _:
+                if _ := unArrayizeValue(
+                    zeroDepthSearch(concatenatedQuery, " FROM ")
+                ):
                     concatenatedQuery, fromTable = concatenatedQuery[:_], concatenatedQuery[_:]
 
                 concatenatedQuery = re.sub(r"(?i)\ASELECT ", "", concatenatedQuery)
                 replacement = "'%s',%s,'%s'" % (kb.chars.start, concatenatedQuery, kb.chars.stop)
-                chars = [_ for _ in replacement]
+                chars = list(replacement)
 
                 count = 0
                 for index in zeroDepthSearch(replacement, ',')[1:]:
@@ -789,9 +791,6 @@ class Agent(object):
 
                 replacement = "CONCAT(%s%s)" % ("CONCAT(" * count, "".join(chars))
                 concatenatedQuery = "%s%s" % (replacement, fromTable)
-            elif fieldsSelect:
-                concatenatedQuery = concatenatedQuery.replace("SELECT ", "CONCAT(CONCAT('%s'," % kb.chars.start, 1)
-                concatenatedQuery += "),'%s')" % kb.chars.stop
             elif fieldsNoSelect:
                 concatenatedQuery = "CONCAT(CONCAT('%s',%s),'%s')" % (kb.chars.start, concatenatedQuery, kb.chars.stop)
 
@@ -848,15 +847,13 @@ class Agent(object):
 
             return unionQuery
         else:
-            _ = zeroDepthSearch(query, " FROM ")
-            if _:
+            if _ := zeroDepthSearch(query, " FROM "):
                 fromTable = query[_[0]:]
 
             if fromTable and query.endswith(fromTable):
                 query = query[:-len(fromTable)]
 
-        topNumRegex = re.search(r"\ATOP\s+([\d]+)\s+", query, re.I)
-        if topNumRegex:
+        if topNumRegex := re.search(r"\ATOP\s+([\d]+)\s+", query, re.I):
             topNum = topNumRegex.group(1)
             query = query[len("TOP %s " % topNum):]
             unionQuery += "TOP %s " % topNum
@@ -874,11 +871,7 @@ class Agent(object):
             if element > 0:
                 unionQuery += ','
 
-            if element == position:
-                unionQuery += query
-            else:
-                unionQuery += char
-
+            unionQuery += query if element == position else char
         if fromTable and not unionQuery.endswith(fromTable):
             unionQuery += fromTable
 
@@ -892,11 +885,7 @@ class Agent(object):
                 if element > 0:
                     unionQuery += ','
 
-                if element == position:
-                    unionQuery += multipleUnions
-                else:
-                    unionQuery += char
-
+                unionQuery += multipleUnions if element == position else char
             if fromTable:
                 unionQuery += fromTable
 

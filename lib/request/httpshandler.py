@@ -5,6 +5,7 @@ Copyright (c) 2006-2021 sqlmap developers (https://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
+
 import re
 import socket
 
@@ -28,7 +29,7 @@ except ImportError:
     pass
 
 _protocols = filterNone(getattr(ssl, _, None) for _ in ("PROTOCOL_TLSv1_2", "PROTOCOL_TLSv1_1", "PROTOCOL_TLSv1", "PROTOCOL_SSLv3", "PROTOCOL_SSLv23", "PROTOCOL_SSLv2"))
-_lut = dict((getattr(ssl, _), _) for _ in dir(ssl) if _.startswith("PROTOCOL_"))
+_lut = {getattr(ssl, _): _ for _ in dir(ssl) if _.startswith("PROTOCOL_")}
 _contexts = {}
 
 class HTTPSConnection(_http_client.HTTPSConnection):

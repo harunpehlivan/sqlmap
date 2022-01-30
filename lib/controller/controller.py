@@ -106,8 +106,10 @@ def _selectInjection():
         kb.injection = kb.injections[0]
 
     elif len(points) > 1:
-        message = "there were multiple injection points, please select "
-        message += "the one to use for following injections:\n"
+        message = (
+            "there were multiple injection points, please select "
+            + "the one to use for following injections:\n"
+        )
 
         points = []
 
@@ -182,17 +184,23 @@ def _showInjections():
         conf.dumper.string("", {"url": conf.url, "query": conf.parameters.get(PLACE.GET), "data": conf.parameters.get(PLACE.POST)}, content_type=CONTENT_TYPE.TARGET)
         conf.dumper.string("", kb.injections, content_type=CONTENT_TYPE.TECHNIQUES)
     else:
-        data = "".join(set(_formatInjection(_) for _ in kb.injections)).rstrip("\n")
+        data = "".join({_formatInjection(_) for _ in kb.injections}).rstrip("\n")
         conf.dumper.string(header, data)
 
     if conf.tamper:
-        warnMsg = "changes made by tampering scripts are not "
-        warnMsg += "included in shown payload content(s)"
+        warnMsg = (
+            "changes made by tampering scripts are not "
+            + "included in shown payload content(s)"
+        )
+
         logger.warn(warnMsg)
 
     if conf.hpp:
-        warnMsg = "changes made by HTTP parameter pollution are not "
-        warnMsg += "included in shown payload content(s)"
+        warnMsg = (
+            "changes made by HTTP parameter pollution are not "
+            + "included in shown payload content(s)"
+        )
+
         logger.warn(warnMsg)
 
 def _randomFillBlankFields(value):
@@ -204,7 +212,9 @@ def _randomFillBlankFields(value):
         if readInput(message, default='Y', boolean=True):
             for match in re.finditer(EMPTY_FORM_FIELDS_REGEX, retVal):
                 item = match.group("result")
-                if not any(_ in item for _ in IGNORE_PARAMETERS) and not re.search(ASP_NET_CONTROL_REGEX, item):
+                if all(
+                    _ not in item for _ in IGNORE_PARAMETERS
+                ) and not re.search(ASP_NET_CONTROL_REGEX, item):
                     newValue = randomStr() if not re.search(r"^id|id$", item, re.I) else randomInt()
                     if item[-1] == DEFAULT_GET_POST_DELIMITER:
                         retVal = retVal.replace(item, "%s%s%s" % (item[:-1], newValue, DEFAULT_GET_POST_DELIMITER))
@@ -219,7 +229,7 @@ def _saveToHashDB():
         injections = []
     injections.extend(_ for _ in kb.injections if _ and _.place is not None and _.parameter is not None)
 
-    _ = dict()
+    _ = {}
     for injection in injections:
         key = (injection.place, injection.parameter, injection.ptype)
         if key not in _:
@@ -242,7 +252,7 @@ def _saveToResultsFile():
         return
 
     results = {}
-    techniques = dict((_[1], _[0]) for _ in getPublicTypeMembers(PAYLOAD.TECHNIQUE))
+    techniques = {_[1]: _[0] for _ in getPublicTypeMembers(PAYLOAD.TECHNIQUE)}
 
     for injection in kb.injections + kb.falsePositives:
         if injection.place is None or injection.parameter is None:

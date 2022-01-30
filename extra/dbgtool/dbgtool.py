@@ -25,14 +25,13 @@ def convert(inputFile):
 
     script = "n %s\nr cx\n" % os.path.basename(inputFile.replace(".", "_"))
     script += "%x\nf 0100 ffff 00\n" % fileSize
-    scrString = ""
-    counter = 256
     counter2 = 0
 
     fp = open(inputFile, "rb")
     fileContent = fp.read()
 
-    for fileChar in fileContent:
+    scrString = ""
+    for counter, fileChar in enumerate(fileContent, start=256):
         unsignedFileChar = fileChar if sys.version_info >= (3, 0) else ord(fileChar)
 
         if unsignedFileChar != 0:
@@ -46,8 +45,6 @@ def convert(inputFile):
             script += "%s\n" % scrString
             scrString = ""
             counter2 = 0
-
-        counter += 1
 
         if counter2 == 20:
             script += "%s\n" % scrString

@@ -126,11 +126,20 @@ def runThreads(numThreads, threadFunction, cleanupFunction=None, forwardExceptio
     kb.multiThreadMode = False
 
     try:
-        if threadChoice and conf.threads == numThreads == 1 and not (kb.injection.data and not any(_ not in (PAYLOAD.TECHNIQUE.TIME, PAYLOAD.TECHNIQUE.STACKED) for _ in kb.injection.data)):
+        if (
+            threadChoice
+            and conf.threads == numThreads == 1
+            and not (
+                kb.injection.data
+                and all(
+                    _ in (PAYLOAD.TECHNIQUE.TIME, PAYLOAD.TECHNIQUE.STACKED)
+                    for _ in kb.injection.data
+                )
+            )
+        ):
             while True:
                 message = "please enter number of threads? [Enter for %d (current)] " % numThreads
-                choice = readInput(message, default=str(numThreads))
-                if choice:
+                if choice := readInput(message, default=str(numThreads)):
                     skipThreadCheck = False
 
                     if choice.endswith('!'):

@@ -5,6 +5,7 @@ Copyright (c) 2006-2021 sqlmap developers (https://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
+
 import codecs
 import os
 import random
@@ -319,7 +320,12 @@ FRONTBASE_ALIASES = ("frontbase",)
 RAIMA_ALIASES = ("raima database manager", "raima", "raimadb", "raimadm", "rdm", "rds", "velocis")
 VIRTUOSO_ALIASES = ("virtuoso", "openlink virtuoso")
 
-DBMS_DIRECTORY_DICT = dict((getattr(DBMS, _), getattr(DBMS_DIRECTORY_NAME, _)) for _ in dir(DBMS) if not _.startswith("_"))
+DBMS_DIRECTORY_DICT = {
+    getattr(DBMS, _): getattr(DBMS_DIRECTORY_NAME, _)
+    for _ in dir(DBMS)
+    if not _.startswith("_")
+}
+
 
 SUPPORTED_DBMS = set(MSSQL_ALIASES + MYSQL_ALIASES + PGSQL_ALIASES + ORACLE_ALIASES + SQLITE_ALIASES + ACCESS_ALIASES + FIREBIRD_ALIASES + MAXDB_ALIASES + SYBASE_ALIASES + DB2_ALIASES + HSQLDB_ALIASES + H2_ALIASES + INFORMIX_ALIASES + MONETDB_ALIASES + DERBY_ALIASES + VERTICA_ALIASES + MCKOI_ALIASES + PRESTO_ALIASES + ALTIBASE_ALIASES + MIMERSQL_ALIASES + CRATEDB_ALIASES + CUBRID_ALIASES + CACHE_ALIASES + EXTREMEDB_ALIASES + RAIMA_ALIASES + VIRTUOSO_ALIASES)
 SUPPORTED_OS = ("linux", "windows")

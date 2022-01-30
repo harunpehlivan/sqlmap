@@ -68,7 +68,7 @@ def direct(query, content=True):
         elif state == TIMEOUT_STATE.TIMEOUT:
             conf.dbmsConnector.close()
             conf.dbmsConnector.connect()
-    elif output:
+    else:
         infoMsg = "resumed: %s..." % getUnicode(output, UNICODE_ENCODING)[:20]
         logger.info(infoMsg)
 
@@ -77,9 +77,8 @@ def direct(query, content=True):
     if not output:
         return output
     elif content:
-        if output and isListLike(output):
-            if len(output[0]) == 1:
-                output = [_[0] for _ in output]
+        if output and isListLike(output) and len(output[0]) == 1:
+            output = [_[0] for _ in output]
 
         retVal = getUnicode(output, noneToNull=True)
         return safecharencode(retVal) if kb.safeCharEncode else retVal

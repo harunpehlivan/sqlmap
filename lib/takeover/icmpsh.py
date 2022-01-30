@@ -112,8 +112,11 @@ class ICMPsh(object):
             written = self.writeFile(self._icmpslave, self._icmpslaveRemote, "binary", forceCheck=True)
 
         if written is not True:
-            errMsg = "there has been a problem uploading icmpsh, it "
-            errMsg += "looks like the binary file has not been written "
+            errMsg = (
+                "there has been a problem uploading icmpsh, it "
+                + "looks like the binary file has not been written "
+            )
+
             errMsg += "on the database underlying file system or an AV has "
             errMsg += "flagged it as malicious and removed it. In such a case "
             errMsg += "it is recommended to recompile icmpsh with slight "

@@ -87,17 +87,14 @@ class Abstraction(Web, UDF, XP_cmdshell):
         choice = None
 
         if not self.alwaysRetrieveCmdOutput:
-            message = "do you want to retrieve the command standard "
-            message += "output? [Y/n/a] "
+            message = "do you want to retrieve the command standard " + "output? [Y/n/a] "
             choice = readInput(message, default='Y').upper()
 
             if choice == 'A':
                 self.alwaysRetrieveCmdOutput = True
 
         if choice == 'Y' or self.alwaysRetrieveCmdOutput:
-            output = self.evalCmd(cmd)
-
-            if output:
+            if output := self.evalCmd(cmd):
                 conf.dumper.string("command standard output", output)
             else:
                 dataToStdout("No output\n")
@@ -107,24 +104,26 @@ class Abstraction(Web, UDF, XP_cmdshell):
     def shell(self):
         if self.webBackdoorUrl and (not isStackingAvailable() or kb.udfFail):
             infoMsg = "calling OS shell. To quit type "
-            infoMsg += "'x' or 'q' and press ENTER"
-            logger.info(infoMsg)
-
         else:
             if Backend.isDbms(DBMS.PGSQL) and self.checkCopyExec():
-                infoMsg = "going to use 'COPY ... FROM PROGRAM ...' "
-                infoMsg += "command execution"
+                infoMsg = "going to use 'COPY ... FROM PROGRAM ...' " + "command execution"
                 logger.info(infoMsg)
 
             elif Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
-                infoMsg = "going to use injected user-defined functions "
-                infoMsg += "'sys_eval' and 'sys_exec' for operating system "
+                infoMsg = (
+                    "going to use injected user-defined functions "
+                    + "'sys_eval' and 'sys_exec' for operating system "
+                )
+
                 infoMsg += "command execution"
                 logger.info(infoMsg)
 
             elif Backend.isDbms(DBMS.MSSQL):
-                infoMsg = "going to use extended procedure 'xp_cmdshell' for "
-                infoMsg += "operating system command execution"
+                infoMsg = (
+                    "going to use extended procedure 'xp_cmdshell' for "
+                    + "operating system command execution"
+                )
+
                 logger.info(infoMsg)
 
             else:
@@ -132,8 +131,8 @@ class Abstraction(Web, UDF, XP_cmdshell):
                 raise SqlmapUnsupportedFeatureException(errMsg)
 
             infoMsg = "calling %s OS shell. To quit type " % (Backend.getOs() or "Windows")
-            infoMsg += "'x' or 'q' and press ENTER"
-            logger.info(infoMsg)
+        infoMsg += "'x' or 'q' and press ENTER"
+        logger.info(infoMsg)
 
         autoCompletion(AUTOCOMPLETE_TYPE.OS, OS.WINDOWS if Backend.isOs(OS.WINDOWS) else OS.LINUX)
 
@@ -166,8 +165,11 @@ class Abstraction(Web, UDF, XP_cmdshell):
             return
 
         if not conf.direct and not isStackingAvailable():
-            errMsg = "stacked queries are not supported hence sqlmap cannot "
-            errMsg += "execute statements as another user. The execution "
+            errMsg = (
+                "stacked queries are not supported hence sqlmap cannot "
+                + "execute statements as another user. The execution "
+            )
+
             errMsg += "will continue and the DBMS credentials provided "
             errMsg += "will simply be ignored"
             logger.error(errMsg)
@@ -175,8 +177,11 @@ class Abstraction(Web, UDF, XP_cmdshell):
             return
 
         if Backend.isDbms(DBMS.MSSQL):
-            msg = "on Microsoft SQL Server 2005 and 2008, OPENROWSET function "
-            msg += "is disabled by default. This function is needed to execute "
+            msg = (
+                "on Microsoft SQL Server 2005 and 2008, OPENROWSET function "
+                + "is disabled by default. This function is needed to execute "
+            )
+
             msg += "statements as another DBMS user since you provided the "
             msg += "option '--dbms-creds'. If you are DBA, you can enable it. "
             msg += "Do you want to enable it? [Y/n] "
@@ -202,8 +207,10 @@ class Abstraction(Web, UDF, XP_cmdshell):
             self.checkDbmsOs(detailed)
 
             if mandatory and not self.isDba():
-                warnMsg = "functionality requested probably does not work because "
-                warnMsg += "the current session user is not a database administrator"
+                warnMsg = (
+                    "functionality requested probably does not work because "
+                    + "the current session user is not a database administrator"
+                )
 
                 if not conf.dbmsCred and Backend.getIdentifiedDbms() in (DBMS.MSSQL, DBMS.PGSQL):
                     warnMsg += ". You can try to use option '--dbms-cred' "

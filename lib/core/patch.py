@@ -137,8 +137,7 @@ def unisonRandom():
         return _rand
 
     def _randint(a, b):
-        _ = a + (_lcg() % (b - a + 1))
-        return _
+        return a + (_lcg() % (b - a + 1))
 
     def _choice(seq):
         return seq[_randint(0, len(seq) - 1)]

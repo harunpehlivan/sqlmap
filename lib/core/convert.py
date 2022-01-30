@@ -360,7 +360,7 @@ def getUnicode(value, encoding=None, noneToNull=False):
         except UnicodeDecodeError:
             return six.text_type(value, UNICODE_ENCODING, errors="reversible")
     elif isListLike(value):
-        value = list(getUnicode(_, encoding, noneToNull) for _ in value)
+        value = [getUnicode(_, encoding, noneToNull) for _ in value]
         return value
     else:
         try:
@@ -400,9 +400,7 @@ def stdoutEncode(value):
 
     if IS_WIN and IS_TTY and kb.get("codePage", -1) is None:
         output = shellExec("chcp")
-        match = re.search(r": (\d{3,})", output or "")
-
-        if match:
+        if match := re.search(r": (\d{3,})", output or ""):
             try:
                 candidate = "cp%s" % match.group(1)
                 codecs.lookup(candidate)
@@ -449,9 +447,8 @@ def getConsoleLength(value):
     4
     """
 
-    if isinstance(value, six.text_type):
-        retVal = sum((2 if ord(_) >= 0x3000 else 1) for _ in value)
-    else:
-        retVal = len(value)
-
-    return retVal
+    return (
+        sum((2 if ord(_) >= 0x3000 else 1) for _ in value)
+        if isinstance(value, six.text_type)
+        else len(value)
+    )

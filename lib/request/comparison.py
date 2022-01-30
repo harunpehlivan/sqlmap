@@ -35,8 +35,10 @@ from lib.core.threads import getCurrentThreadData
 from thirdparty import six
 
 def comparison(page, headers, code=None, getRatioValue=False, pageLength=None):
-    _ = _adjust(_comparison(page, headers, code, getRatioValue, pageLength), getRatioValue)
-    return _
+    return _adjust(
+        _comparison(page, headers, code, getRatioValue, pageLength),
+        getRatioValue,
+    )
 
 def _adjust(condition, getRatioValue):
     if not any((conf.string, conf.notString, conf.regexp, conf.code)):
@@ -44,11 +46,18 @@ def _adjust(condition, getRatioValue):
         # PAYLOAD.WHERE.NEGATIVE response is considered as True; in switch based approach negative logic is not
         # applied as that what is by user considered as True is that what is returned by the comparison mechanism
         # itself
-        retVal = not condition if kb.negativeLogic and condition is not None and not getRatioValue else condition
-    else:
-        retVal = condition if not getRatioValue else (MAX_RATIO if condition else MIN_RATIO)
+        return (
+            not condition
+            if kb.negativeLogic and condition is not None and not getRatioValue
+            else condition
+        )
 
-    return retVal
+    else:
+        return (
+            condition
+            if not getRatioValue
+            else (MAX_RATIO if condition else MIN_RATIO)
+        )
 
 def _comparison(page, headers, code, getRatioValue, pageLength):
     threadData = getCurrentThreadData()
@@ -72,11 +81,10 @@ def _comparison(page, headers, code, getRatioValue, pageLength):
         if conf.notString:
             if conf.notString in rawResponse:
                 return False
+            if kb.errorIsNone and (wasLastResponseDBMSError() or wasLastResponseHTTPError()):
+                return None
             else:
-                if kb.errorIsNone and (wasLastResponseDBMSError() or wasLastResponseHTTPError()):
-                    return None
-                else:
-                    return True
+                return True
 
         # Regular expression to match in page when the query is True and/or valid
         if conf.regexp:
@@ -91,9 +99,16 @@ def _comparison(page, headers, code, getRatioValue, pageLength):
 
     if page:
         # In case of an DBMS error page return None
-        if kb.errorIsNone and (wasLastResponseDBMSError() or wasLastResponseHTTPError()) and not kb.negativeLogic:
-            if not (wasLastResponseHTTPError() and getLastRequestHTTPError() in (conf.ignoreCode or [])):
-                return None
+        if (
+            kb.errorIsNone
+            and (wasLastResponseDBMSError() or wasLastResponseHTTPError())
+            and not kb.negativeLogic
+            and not (
+                wasLastResponseHTTPError()
+                and getLastRequestHTTPError() in (conf.ignoreCode or [])
+            )
+        ):
+            return None
 
         # Dynamic content lines to be excluded before comparison
         if not kb.nullConnection:
@@ -105,8 +120,11 @@ def _comparison(page, headers, code, getRatioValue, pageLength):
 
     if kb.nullConnection and pageLength:
         if not seqMatcher.a:
-            errMsg = "problem occurred while retrieving original page content "
-            errMsg += "which prevents sqlmap from continuation. Please rerun, "
+            errMsg = (
+                "problem occurred while retrieving original page content "
+                + "which prevents sqlmap from continuation. Please rerun, "
+            )
+
             errMsg += "and if the problem persists turn off any optimization switches"
             raise SqlmapNoneDataException(errMsg)
 
@@ -129,10 +147,9 @@ def _comparison(page, headers, code, getRatioValue, pageLength):
         elif kb.skipSeqMatcher or seqMatcher.a and page and any(len(_) > MAX_DIFFLIB_SEQUENCE_LENGTH for _ in (seqMatcher.a, page)):
             if not page or not seqMatcher.a:
                 return float(seqMatcher.a == page)
-            else:
-                ratio = 1. * len(seqMatcher.a) / len(page)
-                if ratio > 1:
-                    ratio = 1. / ratio
+            ratio = 1. * len(seqMatcher.a) / len(page)
+            if ratio > 1:
+                ratio = 1. / ratio
         else:
             seq1, seq2 = None, None
 
@@ -170,10 +187,13 @@ def _comparison(page, headers, code, getRatioValue, pageLength):
 
     # If the url is stable and we did not set yet the match ratio and the
     # current injected value changes the url page content
-    if kb.matchRatio is None:
-        if ratio >= LOWER_RATIO_BOUND and ratio <= UPPER_RATIO_BOUND:
-            kb.matchRatio = ratio
-            logger.debug("setting match ratio for current parameter to %.3f" % kb.matchRatio)
+    if (
+        kb.matchRatio is None
+        and ratio >= LOWER_RATIO_BOUND
+        and ratio <= UPPER_RATIO_BOUND
+    ):
+        kb.matchRatio = ratio
+        logger.debug("setting match ratio for current parameter to %.3f" % kb.matchRatio)
 
     if kb.testMode:
         threadData.lastComparisonRatio = ratio

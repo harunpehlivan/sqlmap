@@ -115,8 +115,7 @@ def _setRequestParams():
             if not (conf.testParameter and match.group("name") not in (removePostHintPrefix(_) for _ in conf.testParameter)) and match.group("name") == match.group("name").strip('\\'):
                 retVal = repl
                 while True:
-                    _ = re.search(r"\\g<([^>]+)>", retVal)
-                    if _:
+                    if _ := re.search(r"\\g<([^>]+)>", retVal):
                         retVal = retVal.replace(_.group(0), match.group(int(_.group(1)) if _.group(1).isdigit() else _.group(1)))
                     else:
                         break
@@ -430,17 +429,16 @@ def _setHashDB():
     if not conf.hashDBFile:
         conf.hashDBFile = conf.sessionFile or os.path.join(conf.outputPath, SESSION_SQLITE_FILE)
 
-    if os.path.exists(conf.hashDBFile):
-        if conf.flushSession:
-            if conf.hashDB:
-                conf.hashDB.closeAll()
+    if os.path.exists(conf.hashDBFile) and conf.flushSession:
+        if conf.hashDB:
+            conf.hashDB.closeAll()
 
-            try:
-                os.remove(conf.hashDBFile)
-                logger.info("flushing session file")
-            except OSError as ex:
-                errMsg = "unable to flush the session file ('%s')" % getSafeExString(ex)
-                raise SqlmapFilePathException(errMsg)
+        try:
+            os.remove(conf.hashDBFile)
+            logger.info("flushing session file")
+        except OSError as ex:
+            errMsg = "unable to flush the session file ('%s')" % getSafeExString(ex)
+            raise SqlmapFilePathException(errMsg)
 
     conf.hashDB = HashDB(conf.hashDBFile)
 
@@ -465,13 +463,20 @@ def _resumeHashDBValues():
     conf.tmpPath = conf.tmpPath or hashDBRetrieve(HASHDB_KEYS.CONF_TMP_PATH)
 
     for injection in hashDBRetrieve(HASHDB_KEYS.KB_INJECTIONS, True) or []:
-        if isinstance(injection, InjectionDict) and injection.place in conf.paramDict and injection.parameter in conf.paramDict[injection.place]:
-            if not conf.technique or intersect(conf.technique, injection.data.keys()):
-                if intersect(conf.technique, injection.data.keys()):
-                    injection.data = dict(_ for _ in injection.data.items() if _[0] in conf.technique)
-                if injection not in kb.injections:
-                    kb.injections.append(injection)
-                    kb.vulnHosts.add(conf.hostname)
+        if (
+            isinstance(injection, InjectionDict)
+            and injection.place in conf.paramDict
+            and injection.parameter in conf.paramDict[injection.place]
+            and (
+                not conf.technique
+                or intersect(conf.technique, injection.data.keys())
+            )
+        ):
+            if intersect(conf.technique, injection.data.keys()):
+                injection.data = dict(_ for _ in injection.data.items() if _[0] in conf.technique)
+            if injection not in kb.injections:
+                kb.injections.append(injection)
+                kb.vulnHosts.add(conf.hostname)
 
     _resumeDBMS()
     _resumeOS()
@@ -484,29 +489,24 @@ def _resumeDBMS():
     value = hashDBRetrieve(HASHDB_KEYS.DBMS)
 
     if not value:
-        if conf.offline:
-            errMsg = "unable to continue in offline mode "
-            errMsg += "because of lack of usable "
-            errMsg += "session data"
-            raise SqlmapNoneDataException(errMsg)
-        else:
+        if not conf.offline:
             return
 
+        errMsg = "unable to continue in offline mode " + "because of lack of usable "
+        errMsg += "session data"
+        raise SqlmapNoneDataException(errMsg)
     dbms = value.lower()
     dbmsVersion = [UNKNOWN_DBMS_VERSION]
     _ = "(%s)" % ('|'.join(SUPPORTED_DBMS))
-    _ = re.search(r"\A%s (.*)" % _, dbms, re.I)
-
-    if _:
+    if _ := re.search(r"\A%s (.*)" % _, dbms, re.I):
         dbms = _.group(1).lower()
         dbmsVersion = [_.group(2)]
 
     if conf.dbms:
-        check = True
-        for aliases, _, _, _ in DBMS_DICT.values():
-            if conf.dbms.lower() in aliases and dbms not in aliases:
-                check = False
-                break
+        check = not any(
+            conf.dbms.lower() in aliases and dbms not in aliases
+            for aliases, _, _, _ in DBMS_DICT.values()
+        )
 
         if not check:
             message = "you provided '%s' as a back-end DBMS, " % conf.dbms
